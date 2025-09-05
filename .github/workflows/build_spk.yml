@@ -36,6 +36,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: success()
+        env:
+          # 必须显式声明所需权限
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
         with:
           tag_name: v${{ github.event.inputs.version }}
           name: OpenList Client ${{ github.event.inputs.version }}
