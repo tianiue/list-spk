@@ -127,6 +127,7 @@ jobs:
           echo "- armv8" >> RELEASE_NOTES.md
           
       - name: 创建并推送Git标签
+        if: steps.check-tag.outputs.TAG_EXISTS == 'false'
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
