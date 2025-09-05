@@ -1,0 +1,31 @@
+#!/bin/sh
+CONFIG_FILE="/var/packages/OpenListMount/etc/config.json"
+MOUNT_POINT=$(jq -r '.mount_point' $CONFIG_FILE)
+
+case $1 in
+    start)
+        if [ -f "$CONFIG_FILE" ]; then
+            AUTH_TYPE=$(jq -r '.auth_type' $CONFIG_FILE)
+            if [ "$AUTH_TYPE" = "api" ]; then
+                rclone mount openlist: "$MOUNT_POINT" \
+                  --webdav-header "Authorization: Bearer $(jq -r '.api_token' $CONFIG_FILE)" \
+                  --vfs-cache-mode writes \
+                  --allow-other \
+                  --umask 000 &
+            else
+                rclone mount openlist: "$MOUNT_POINT" \
+                  --webdav-user $(jq -r '.username' $CONFIG_FILE) \
+                  --webdav-pass $(jq -r '.password' $CONFIG_FILE) \
+                  --vfs-cache-mode writes \
+                  --allow-other \
+                  --umask 000 &
+            fi
+        fi
+        ;;
+    stop)
+        fusermount -u "$MOUNT_POINT"
+        ;;
+    status)
+        mountpoint -q "$MOUNT_POINT" && echo "Running" || echo "Stopped"
+        ;;
+esac
