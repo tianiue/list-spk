@@ -37,11 +37,6 @@ jobs:
          cp -r service package/
          cp -r web package/
          tar -czf "$GITHUB_WORKSPACE/build/openlist-client-${{ github.event.inputs.version }}.spk" \
-             -C "$GITHUB_WORKSPACE/package" . || (echo "##[error]Tar failed"; exit 1)
-         if ! tar -czf "build/openlist-client-${{ github.event.inputs.version }}.spk" -C package .; then
-            echo "##[error]Build failed" >&2
-            exit 1
-         fi
          
       - name: Build artifacts
         run: |
