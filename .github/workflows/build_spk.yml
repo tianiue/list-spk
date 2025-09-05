@@ -41,7 +41,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 使用自动生成的token
+          GITHUB_TOKEN: ${{ secrets.RELEASE2_TOKEN }}  # 使用自动生成的token
         with:
           tag_name: v1.0.0
           files: |
