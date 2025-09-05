@@ -1,6 +1,5 @@
 name: Build OpenList Synology Package
 
-# 仅支持手动触发
 on:
   workflow_dispatch:
     inputs:
@@ -14,17 +13,15 @@ on:
         type: boolean
         default: false
 
-# 显式声明最小权限（需要添加标签的权限）
 permissions:
-  contents: write  # 允许写入仓库内容（用于发布版本和创建标签）
-  actions: read    # 仅允许读取工作流信息
+  contents: write
+  actions: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # 支持的群晖架构
         arch: [x86_64, armv7, armv8]
     
     steps:
@@ -36,48 +33,62 @@ jobs:
       - name: 设置版本号
         id: version
         run: |
-          # 仅使用手动输入的版本号
           echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           
-      - name: 缓存依赖
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            
-      - name: 安装构建依赖
+      - name: 安装构建依赖（含权限和换行符工具）
         run: |
           sudo apt-get update
-          sudo apt-get install -y libarchive-tools python3 python3-pip
+          sudo apt-get install -y libarchive-tools python3 python3-pip dos2unix  # 新增dos2unix处理换行符
           pip3 install --upgrade pip
           pip3 install -r requirements.txt
           
       - name: 准备构建环境
         run: |
-          # 创建构建目录
           mkdir -p build/target
-          
-          # 复制源代码和配置文件
           cp -r src/* build/target/
-          cp -r package/* build/
+          cp -r package/* build/  # 复制package下的INFO、scripts、icons等
           
-          # 根据架构修改INFO文件
+          # 替换INFO中的架构和版本（确保无语法错误）
           sed -i "s|{ARCH}|${{ matrix.arch }}|g" build/INFO
           sed -i "s|{VERSION}|${{ steps.version.outputs.VERSION }}|g" build/INFO
           
-      - name: 构建SPK包
+          # 转换脚本文件为Unix换行符（LF）
+          dos2unix build/start-stop-status build/postinst build/prerm  # 关键：修复换行符问题
+          
+      - name: 设置文件权限（核心修正）
         run: |
           cd build
-          # 群晖SPK要求使用特定格式的tar包
-          tar --format=gnu --owner=0 --group=0 -cvf ../openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk *
+          # 脚本文件必须有可执行权限（755）
+          chmod 755 start-stop-status postinst prerm
+          # INFO文件和图标权限（644）
+          chmod 644 INFO
+          chmod 644 icons/*
+          # 源码文件权限（非执行文件用644）
+          chmod 644 target/*
           
-      - name: 验证SPK包
+      - name: 构建SPK包（优化tar参数）
         run: |
-          # 简单验证SPK包结构
-          if ! tar -tf openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk | grep -q "INFO"; then
-            echo "SPK包不包含必要的INFO文件"
+          cd build
+          # 新增--numeric-owner确保用户/组ID为数字，兼容7.2.2校验
+          tar --format=gnu --owner=0 --group=0 --numeric-owner -cvf ../openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk ./*
+          
+      - name: 验证SPK包结构
+        run: |
+          # 检查关键文件是否存在且权限正确
+          SPK_FILE="openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk"
+          if ! tar -tf $SPK_FILE | grep -q "INFO"; then
+            echo "错误：SPK缺少INFO文件"
+            exit 1
+          fi
+          if ! tar -tf $SPK_FILE | grep -q "start-stop-status"; then
+            echo "错误：SPK缺少服务脚本"
+            exit 1
+          fi
+          # 检查脚本权限（通过tar的v参数输出确认，或提取后检查）
+          mkdir -p temp_spk
+          tar -xf $SPK_FILE -C temp_spk
+          if [ $(stat -c "%a" temp_spk/start-stop-status) -ne 755 ]; then
+            echo "错误：start-stop-status权限不正确"
             exit 1
           fi
           
@@ -105,7 +116,6 @@ jobs:
       - name: 设置版本号
         id: version
         run: |
-          # 仅使用手动输入的版本号
           echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           echo "TAG=v${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           
@@ -119,7 +129,8 @@ jobs:
           echo "## OpenList 群晖客户端 ${{ steps.version.outputs.VERSION }}" > RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 本次更新内容" >> RELEASE_NOTES.md
-          echo "- 手动构建版本" >> RELEASE_NOTES.md
+          echo "- 修复群晖7.2.2安装格式问题" >> RELEASE_NOTES.md
+          echo "- 优化SPK打包规范" >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 支持的架构" >> RELEASE_NOTES.md
           echo "- x86_64" >> RELEASE_NOTES.md
@@ -127,7 +138,6 @@ jobs:
           echo "- armv8" >> RELEASE_NOTES.md
           
       - name: 创建并推送Git标签
-        if: steps.check-tag.outputs.TAG_EXISTS == 'false'
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
@@ -137,7 +147,7 @@ jobs:
       - name: 创建GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.version.outputs.TAG }}  # 指定标签
+          tag_name: ${{ steps.version.outputs.TAG }}
           name: OpenList 群晖客户端 v${{ steps.version.outputs.VERSION }}
           body_path: RELEASE_NOTES.md
           files: release/*.spk
