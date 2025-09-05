@@ -1,5 +1,4 @@
-mkdir -p service
-echo "Flask==2.0.1
-webdavclient3==3.14.5
+Flask==2.0.1
+webdav-client==3.14.5
 configparser==5.0.2
-gunicorn==20.1.0" > service/requirements.txt
+gunicorn==20.1.0
