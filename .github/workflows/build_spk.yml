@@ -35,19 +35,19 @@ jobs:
         run: |
           echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           
-      - name: 安装构建依赖（含权限和换行符工具）
+      - name: 安装构建依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y libarchive-tools python3 python3-pip dos2unix  # 新增dos2unix处理换行符
+          sudo apt-get install -y libarchive-tools python3 python3-pip dos2unix
           pip3 install --upgrade pip
-          pip3 install -r requirements.txt
+          # 若无需Python依赖，删除下面一行
+          # pip3 install -r requirements.txt
           
       - name: 准备构建环境
         run: |
-          # 准备构建环境
           mkdir -p build/target
           cp -r src/* build/target/
-          cp -r package/* build/  # 复制package下的所有文件到build
+          cp -r package/* build/
 
           # 验证关键脚本是否复制成功
           if [ ! -f "build/start-stop-status" ]; then
@@ -63,33 +63,31 @@ jobs:
             exit 1
           fi
 
-          # 替换INFO中的架构和版本
-          sed -i "s|{ARCH}|armv8|g" build/INFO
-          sed -i "s|{VERSION}|1.0.0|g" build/INFO
+          # 动态替换架构和版本（核心修正）
+          sed -i "s|{ARCH}|${{ matrix.arch }}|g" build/INFO
+          sed -i "s|{VERSION}|${{ steps.version.outputs.VERSION }}|g" build/INFO
 
-          # 转换脚本文件为Unix换行符（忽略可能的错误）
+          # 转换换行符
           dos2unix build/start-stop-status build/postinst build/prerm
           
-      - name: 设置文件权限（核心修正）
+      - name: 设置文件权限
         run: |
           cd build
-          # 脚本文件必须有可执行权限（755）
           chmod 755 start-stop-status postinst prerm
-          # INFO文件和图标权限（644）
           chmod 644 INFO
-          chmod 644 icons/*
-          # 源码文件权限（非执行文件用644）
+          # 容错处理：仅当icons目录存在时设置权限
+          if [ -d "icons" ]; then
+            chmod 644 icons/*
+          fi
           chmod 644 target/*
           
-      - name: 构建SPK包（优化tar参数）
+      - name: 构建SPK包
         run: |
           cd build
-          # 新增--numeric-owner确保用户/组ID为数字，兼容7.2.2校验
           tar --format=gnu --owner=0 --group=0 --numeric-owner -cvf ../openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk ./*
           
       - name: 验证SPK包结构
         run: |
-          # 检查关键文件是否存在且权限正确
           SPK_FILE="openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk"
           if ! tar -tf $SPK_FILE | grep -q "INFO"; then
             echo "错误：SPK缺少INFO文件"
@@ -99,7 +97,6 @@ jobs:
             echo "错误：SPK缺少服务脚本"
             exit 1
           fi
-          # 检查脚本权限（通过tar的v参数输出确认，或提取后检查）
           mkdir -p temp_spk
           tar -xf $SPK_FILE -C temp_spk
           if [ $(stat -c "%a" temp_spk/start-stop-status) -ne 755 ]; then
