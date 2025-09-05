@@ -1,19 +1,13 @@
 #!/bin/sh
 
-# 创建配置目录
-mkdir -p /var/packages/OpenList/etc
-mkdir -p /var/packages/OpenList/target
+# DSM 7.2中共享文件夹路径规范：/volume1/[文件夹名]
+MOUNT_DIR="/volume1/OpenList_Mount"
 
-# 设置权限
-chmod 755 /var/packages/OpenList/target/main.py
-chmod 755 /var/packages/OpenList/target/service.sh
+# 创建挂载目录（需确保权限正确，允许用户访问）
+mkdir -p "$MOUNT_DIR"
+chmod 777 "$MOUNT_DIR"  # 可根据需求调整权限（如限制为管理员）
 
-# 注册为群晖服务
-synoservice --install /var/packages/OpenList/target/service.xml
+# 记录安装路径到配置文件（供客户端使用）
+echo "mount_dir=$MOUNT_DIR" > /var/packages/OpenListClient/etc/config.ini
 
-# 创建挂载点目录
-mkdir -p /volume1/OpenList_Mount
-chmod 777 /volume1/OpenList_Mount
-
-# 显示安装完成信息
-echo "OpenList客户端安装完成"
+exit 0
