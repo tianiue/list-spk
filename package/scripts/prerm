@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# 停止服务
+synoservice --stop OpenList
+
+# 卸载服务
+synoservice --uninstall OpenList
+
+# 解除挂载
+if mountpoint -q /volume1/OpenList_Mount; then
+    umount /volume1/OpenList_Mount
+fi
+
+echo "OpenList客户端卸载完成"
