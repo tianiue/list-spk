@@ -1,4 +1,4 @@
 Flask==2.0.1
-webdav-client==3.14.5
-configparser==5.0.2
+webdavclient3==3.14.5
+configparser==5.2.0
 gunicorn==20.1.0
