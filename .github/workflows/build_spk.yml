@@ -38,4 +38,3 @@ jobs:
           tag_name: v${{ inputs.version }}
           files: |
            build/output.zip
-           build/release.apk
