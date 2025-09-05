@@ -44,16 +44,31 @@ jobs:
           
       - name: 准备构建环境
         run: |
+          # 准备构建环境
           mkdir -p build/target
           cp -r src/* build/target/
-          cp -r package/* build/  # 复制package下的INFO、scripts、icons等
-          
-          # 替换INFO中的架构和版本（确保无语法错误）
-          sed -i "s|{ARCH}|${{ matrix.arch }}|g" build/INFO
-          sed -i "s|{VERSION}|${{ steps.version.outputs.VERSION }}|g" build/INFO
-          
-          # 转换脚本文件为Unix换行符（LF）
-          dos2unix build/start-stop-status build/postinst build/prerm  # 关键：修复换行符问题
+          cp -r package/* build/  # 复制package下的所有文件到build
+
+          # 验证关键脚本是否复制成功
+          if [ ! -f "build/start-stop-status" ]; then
+            echo "错误：start-stop-status文件未复制成功"
+            exit 1
+          fi
+          if [ ! -f "build/postinst" ]; then
+            echo "错误：postinst文件未复制成功"
+            exit 1
+          fi
+          if [ ! -f "build/prerm" ]; then
+            echo "错误：prerm文件未复制成功"
+            exit 1
+          fi
+
+          # 替换INFO中的架构和版本
+          sed -i "s|{ARCH}|armv8|g" build/INFO
+          sed -i "s|{VERSION}|1.0.0|g" build/INFO
+
+          # 转换脚本文件为Unix换行符（忽略可能的错误）
+          dos2unix build/start-stop-status build/postinst build/prerm
           
       - name: 设置文件权限（核心修正）
         run: |
