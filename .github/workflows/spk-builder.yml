@@ -1,0 +1,64 @@
+name: Build Synology SPK Package
+
+on:
+  push:
+    branches: [ main ]
+  release:
+    types: [ created ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tar gzip coreutils
+          
+      - name: Create SPK structure
+        run: |
+          mkdir -p package/conf
+          mkdir -p package/scripts
+          mkdir -p package/webapi
+          
+          # Copy source files
+          cp -r src/* package/
+          
+          # Generate INFO file
+          cat <<EOF > package/INFO
+          package="OpenListMount"
+          version="$(date +%Y%m%d)"
+          arch="x86_64 aarch64"
+          firmware="7.2-69057"
+          maintainer="OpenListTeam"
+          displayname="OpenList Mount"
+          description="Mount OpenList WebDAV with dual auth support"
+          install_dep_packages="WebDAVServer:service"
+          startable="yes"
+          support_conf_folder="yes"
+          dsmappname="SYNO.SDS.AdminCenter.Application"
+          dsmapppage="content"
+          adminport="8182"
+          EOF
+          
+          # Set permissions
+          chmod 755 package/scripts/*
+
+      - name: Package SPK
+        run: |
+          cd package
+          tar -czvf ../OpenListMount.spk *
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: OpenListMount.spk
+          path: OpenListMount.spk
+          
+      - name: Create release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: OpenListMount.spk
