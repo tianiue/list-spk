@@ -1,50 +1,91 @@
-name: Build SPK Package
+name: Build SPK Package (Production-Ready)
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (e.g. 2.1.0)'
+        required: false
+        default: '2.1.0'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10']
     steps:
       - uses: actions/checkout@v4
-      
+        with:
+          fetch-depth: 0  # 获取完整历史记录
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
-          
-      - name: Install dependencies
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies
         run: |
-          sudo apt-get install -y tar gzip jq tree
-          pip install pyinstaller
-          
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            tar gzip tree rsync \
+            && sudo apt-get clean
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install pyinstaller==5.13.2 --no-cache-dir
+
       - name: Prepare directory structure
         run: |
+          set -euo pipefail
           mkdir -p package/{bin,scripts,web}
-          [ -d "src/scripts" ] && cp -r src/scripts/* package/scripts/ || touch package/scripts/.keep
-          
+          if [ -d "src/scripts" ]; then
+            rsync -a --delete --exclude='.keep' src/scripts/ package/scripts/
+          else
+            echo "::warning::No src/scripts directory found"
+            touch package/scripts/.keep
+          fi
+
       - name: Build desktop client
         run: |
-          pyinstaller --onefile src/main.py --name openlist-gui
-          cp dist/openlist-gui package/bin/
-          
-      - name: Verify scripts
+          pyinstaller --onefile \
+            --name openlist-gui \
+            --noconfirm \
+            --clean \
+            --log-level=WARN \
+            src/main.py
+          install -m 755 -D dist/openlist-gui package/bin/
+
+      - name: Set script permissions
         run: |
-          if [ -z "$(ls -A package/scripts/)" ]; then
-            echo "::warning::No scripts found in package/scripts/"
+          if [ -n "$(find package/scripts -maxdepth 1 -type f)" ]; then
+            find package/scripts -type f -exec chmod -v +x {} +
+            echo "::notice::Set execute permissions for $(find package/scripts -type f | wc -l) scripts"
           else
-            chmod +x package/scripts/*
+            echo "::warning::No scripts found in package/scripts/"
           fi
-          
-      - name: Package SPK
+
+      - name: Package verification
         run: |
-          tar -czvf OpenListMount-${{ github.event.inputs.version || '2.1.0' }}.spk \
+          echo "Verifying package contents:"
+          tree -L 2 package/
+          du -sh package/
+
+      - name: Create SPK archive
+        run: |
+          VERSION=${{ inputs.version }}
+          tar -czvf "OpenListMount-${VERSION}.spk" \
             -C package \
-            --owner=root --group=root \
+            --owner=0 --group=0 \
+            --transform 's,^,OpenListMount-${VERSION}/,' \
             INFO bin scripts
-          
+          echo "::notice::Created package: OpenListMount-${VERSION}.spk"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: spk-package
+          name: spk-release
           path: OpenListMount-*.spk
+          retention-days: 7
+          if-no-files-found: error
