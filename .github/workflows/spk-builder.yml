@@ -1,4 +1,4 @@
-name: Build and Release SPK Package
+name: Build SPK Package
 
 on:
   workflow_dispatch:
@@ -6,11 +6,7 @@ on:
       version:
         description: 'Package version'
         required: true
-        default: '1.0.0'
-      arch:
-        description: 'Target architecture'
-        required: true
-        default: 'x86_64'
+        default: '2.1.0'
 
 jobs:
   build:
@@ -18,44 +14,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup build environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential tar gzip
+      - name: Setup environment
+        run: sudo apt-get install -y tar gzip
         
-      - name: Create SPK structure
+      - name: Prepare package
         run: |
           mkdir -p package/{bin,etc,scripts,web}
           cp -r src/* package/
           chmod +x package/scripts/*
           
-      - name: Generate INFO file
+      - name: Create INFO file
         run: |
           cat > package/INFO <<EOF
-          package="${{ github.event.inputs.package_name || 'OpenListMount' }}"
-          version="${{ inputs.version }}"
-          arch="${{ inputs.arch }}"
-          maintainer="YourName"
-          displayname="OpenList Mount"
-          description="Mount OpenList WebDAV"
-          install_dep_packages="WebDAVServer:service"
-          startable="yes"
-          dsmappname="SYNO.SDS.AdminCenter.Application"
+          $(cat INFO)
+          version="${{ github.event.inputs.version }}"
           EOF
           
-      - name: Create SPK package
-        run: |
-          tar -czvf ${{ github.event.inputs.package_name || 'OpenListMount' }}-${{ inputs.version }}-${{ inputs.arch }}.spk -C package .
-          
+      - name: Build SPK
+        run: tar -czvf OpenListMount-${{ github.event.inputs.version }}-$(uname -m).spk -C package .
+        
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: spk-package
-          path: ${{ github.event.inputs.package_name || 'OpenListMount' }}-${{ inputs.version }}-${{ inputs.arch }}.spk
-          
-      - name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ inputs.version }}
-          name: Release v${{ inputs.version }}
-          files: ${{ github.event.inputs.package_name || 'OpenListMount' }}-${{ inputs.version }}-${{ inputs.arch }}.spk
+          path: OpenListMount-${{ github.event.inputs.version }}-*.spk
