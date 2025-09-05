@@ -1,4 +1,5 @@
-name: Secure Build and Release SPK
+name: Build and Release SPK
+
 
 on:
   workflow_dispatch:
@@ -20,31 +21,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4  # 升级到最新稳定版
-        with:
-          fetch-depth: 0           # 仅拉取必要提交历史
-
+      - uses: actions/checkout@v2
+      
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v2
         with:
           python-version: '3.8'
-
+          
       - name: Install dependencies
-        run: pip install --user -r ./requirements.txt  # 用户级安装避免全局依赖污染
-
+        run: pip install -r ./requirements.txt
+        
       - name: Build SPK
         run: |
           mkdir -p package/scripts
           cp -r service package/
           cp -r web package/
-          tar -czvf "openlist-client-${{ github.event.inputs.version }}.spk" package/*
-          mv *.spk build/          # 统一输出到build目录
+          tar -czvf openlist-client-${{ github.event.inputs.version }}.spk package/*
+
 
       - name: Build artifacts
         run: |
           mkdir -p build
-          echo "${{ github.event.inputs.release_notes }}" > build/release.txt
-          zip -jr build/release.zip build/*  # 仅打包必要文件
+          echo "Release content" > build/release.txt
+          zip -r build/release.zip build/
 
       - uses: softprops/action-gh-release@v1
         env:
@@ -53,3 +52,4 @@ jobs:
           tag_name: "v${{ github.event.inputs.version }}"  # 动态版本号
           files: |
             build/*.spk
+            build/release.zip
