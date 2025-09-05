@@ -1,19 +1,37 @@
-name: Build SPK Package
+name: Build and Release SPK
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    tags:
+      - 'v*'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+          
+      - name: Install dependencies
+        run: pip install -r service/requirements.txt
+        
       - name: Build SPK
         run: |
           mkdir -p package/scripts
           cp -r service package/
           cp -r web package/
           tar -czvf openlist-client.spk package/*
+          
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./openlist-client.spk
+          asset_name: openlist-client.spk
+          asset_content_type: application/octet-stream
