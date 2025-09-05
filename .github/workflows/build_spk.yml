@@ -40,7 +40,7 @@ jobs:
           echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           
       - name: 缓存依赖
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -82,7 +82,7 @@ jobs:
           fi
           
       - name: 上传构建产物
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}
           path: openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk
@@ -98,7 +98,7 @@ jobs:
           fetch-depth: 0
           
       - name: 下载所有构建产物
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
           
