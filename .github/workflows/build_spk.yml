@@ -45,11 +45,21 @@ jobs:
           
       - name: 准备构建环境
         run: |
+          # 先查看package目录下的文件（关键调试）
+          echo "=== 查看package目录下的文件 ==="
+          ls -l package/  # 列出package目录内容，确认postinst是否存在
+    
+          # 创建构建目录
           mkdir -p build/target
-          cp -r src/* build/target/
-          cp -r package/* build/
-
-          # 验证关键脚本是否复制成功
+          # 复制文件（保留输出，查看是否有错误）
+          echo "=== 开始复制文件 ==="
+          cp -r package/* build/ || echo "复制失败，错误信息：$?"  # 捕获复制错误
+    
+          # 查看build目录内容（确认是否复制成功）
+          echo "=== 查看build目录下的文件 ==="
+          ls -l build/
+    
+          # 验证关键脚本是否存在（原验证步骤）
           if [ ! -f "build/start-stop-status" ]; then
             echo "错误：start-stop-status文件未复制成功"
             exit 1
@@ -62,13 +72,6 @@ jobs:
             echo "错误：prerm文件未复制成功"
             exit 1
           fi
-
-          # 动态替换架构和版本（核心修正）
-          sed -i "s|{ARCH}|${{ matrix.arch }}|g" build/INFO
-          sed -i "s|{VERSION}|${{ steps.version.outputs.VERSION }}|g" build/INFO
-
-          # 转换换行符
-          dos2unix build/start-stop-status build/postinst build/prerm
           
       - name: 设置文件权限
         run: |
