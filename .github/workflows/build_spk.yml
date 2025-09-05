@@ -1,0 +1,38 @@
+name: Build SPK Package
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y tar gzip jq
+          pip install pyinstaller
+          
+      - name: Build desktop client
+        run: |
+          pyinstaller --onefile src/main.py --name openlist-gui
+          cp dist/openlist-gui package/bin/
+          
+      - name: Package SPK
+        run: |
+          chmod +x package/scripts/*
+          tar -czvf OpenListMount-${{ github.event.inputs.version || '2.1.0' }}.spk \
+            -C package \
+            --owner=root --group=root \
+            INFO bin scripts
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: spk-package
+          path: OpenListMount-*.spk
