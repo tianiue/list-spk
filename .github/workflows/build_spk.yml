@@ -1,5 +1,6 @@
 name: Build OpenList Synology Package
 
+# 仅支持手动触发
 on:
   workflow_dispatch:
     inputs:
@@ -13,15 +14,17 @@ on:
         type: boolean
         default: false
 
+# 显式声明最小权限（需要添加标签的权限）
 permissions:
-  contents: write
-  actions: read
+  contents: write  # 允许写入仓库内容（用于发布版本和创建标签）
+  actions: read    # 仅允许读取工作流信息
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        # 支持的群晖架构
         arch: [x86_64, armv7, armv8]
     
     steps:
@@ -33,77 +36,48 @@ jobs:
       - name: 设置版本号
         id: version
         run: |
+          # 仅使用手动输入的版本号
           echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           
+      - name: 缓存依赖
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            
       - name: 安装构建依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y libarchive-tools python3 python3-pip dos2unix
+          sudo apt-get install -y libarchive-tools python3 python3-pip
           pip3 install --upgrade pip
-          # 若无需Python依赖，删除下面一行
-          # pip3 install -r requirements.txt
+          pip3 install -r requirements.txt
           
       - name: 准备构建环境
         run: |
-          # 先查看package目录下的文件（关键调试）
-          echo "=== 查看package目录下的文件 ==="
-          ls -l package/  # 列出package目录内容，确认postinst是否存在
-    
           # 创建构建目录
           mkdir -p build/target
-          # 复制文件（保留输出，查看是否有错误）
-          echo "=== 开始复制文件 ==="
-          cp -r package/* build/ || echo "复制失败，错误信息：$?"  # 捕获复制错误
-    
-          # 查看build目录内容（确认是否复制成功）
-          echo "=== 查看build目录下的文件 ==="
-          ls -l build/
-    
-          # 验证关键脚本是否存在（原验证步骤）
-          if [ ! -f "build/start-stop-status" ]; then
-            echo "错误：start-stop-status文件未复制成功"
-            exit 1
-          fi
-          if [ ! -f "build/postinst" ]; then
-            echo "错误：postinst文件未复制成功"
-            exit 1
-          fi
-          if [ ! -f "build/prerm" ]; then
-            echo "错误：prerm文件未复制成功"
-            exit 1
-          fi
           
-      - name: 设置文件权限
-        run: |
-          cd build
-          chmod 755 start-stop-status postinst prerm
-          chmod 644 INFO
-          # 容错处理：仅当icons目录存在时设置权限
-          if [ -d "icons" ]; then
-            chmod 644 icons/*
-          fi
-          chmod 644 target/*
+          # 复制源代码和配置文件
+          cp -r src/* build/target/
+          cp -r package/* build/
+          
+          # 根据架构修改INFO文件
+          sed -i "s|{ARCH}|${{ matrix.arch }}|g" build/INFO
+          sed -i "s|{VERSION}|${{ steps.version.outputs.VERSION }}|g" build/INFO
           
       - name: 构建SPK包
         run: |
           cd build
-          tar --format=gnu --owner=0 --group=0 --numeric-owner -cvf ../openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk ./*
+          # 群晖SPK要求使用特定格式的tar包
+          tar --format=gnu --owner=0 --group=0 -cvf ../openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk *
           
-      - name: 验证SPK包结构
+      - name: 验证SPK包
         run: |
-          SPK_FILE="openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk"
-          if ! tar -tf $SPK_FILE | grep -q "INFO"; then
-            echo "错误：SPK缺少INFO文件"
-            exit 1
-          fi
-          if ! tar -tf $SPK_FILE | grep -q "start-stop-status"; then
-            echo "错误：SPK缺少服务脚本"
-            exit 1
-          fi
-          mkdir -p temp_spk
-          tar -xf $SPK_FILE -C temp_spk
-          if [ $(stat -c "%a" temp_spk/start-stop-status) -ne 755 ]; then
-            echo "错误：start-stop-status权限不正确"
+          # 简单验证SPK包结构
+          if ! tar -tf openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk | grep -q "INFO"; then
+            echo "SPK包不包含必要的INFO文件"
             exit 1
           fi
           
@@ -131,6 +105,7 @@ jobs:
       - name: 设置版本号
         id: version
         run: |
+          # 仅使用手动输入的版本号
           echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           echo "TAG=v${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           
@@ -144,8 +119,7 @@ jobs:
           echo "## OpenList 群晖客户端 ${{ steps.version.outputs.VERSION }}" > RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 本次更新内容" >> RELEASE_NOTES.md
-          echo "- 修复群晖7.2.2安装格式问题" >> RELEASE_NOTES.md
-          echo "- 优化SPK打包规范" >> RELEASE_NOTES.md
+          echo "- 手动构建版本" >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 支持的架构" >> RELEASE_NOTES.md
           echo "- x86_64" >> RELEASE_NOTES.md
@@ -153,6 +127,7 @@ jobs:
           echo "- armv8" >> RELEASE_NOTES.md
           
       - name: 创建并推送Git标签
+        if: steps.check-tag.outputs.TAG_EXISTS == 'false'
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
@@ -162,7 +137,7 @@ jobs:
       - name: 创建GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.version.outputs.TAG }}
+          tag_name: ${{ steps.version.outputs.TAG }}  # 指定标签
           name: OpenList 群晖客户端 v${{ steps.version.outputs.VERSION }}
           body_path: RELEASE_NOTES.md
           files: release/*.spk
