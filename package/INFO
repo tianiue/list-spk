@@ -1,17 +1,14 @@
 package="OpenListClient"
 version="1.0.0"
 displayname="OpenList 客户端"
-description="连接OpenList网盘服务，将远程存储映射为本地文件夹（支持DSM 7.2）"
-# 支持的群晖架构（DSM 7.2常见架构，根据实际编译适配补充）
-arch="x86_64 armv8 aarch64"
+description="连接OpenList网盘服务，将远程存储映射为本地文件夹"
+arch="x86_64 aarch64 armv8"  # 适配7.2.2主流机型
 maintainer="tianiue"
 support_url="https://github.com/tianiue/olist-spk"
-# 明确最低支持DSM 7.2（关键适配点）
-dsm_min_ver="7.2"
-dsm_max_ver="7.2.1"  # 可选，限制最高支持版本
-install_wizard="yes"  # 启用安装向导（DSM 7.2推荐）
-startable="yes"  # 支持启动/停止服务
-# DSM 7.2新增：指定服务类型（后台服务需声明）
+dsm_min_ver="7.0"
+dsm_max_ver="7.2.2"  # 明确支持7.2.2
+install_wizard="yes"
+startable="yes"
 service_type="daemon"
-# 权限声明（DSM 7.2严格权限管控，需明确所需权限）
-privilege="storage"  # 允许访问存储卷
+privilege="storage network"
+depend="python3:any"
