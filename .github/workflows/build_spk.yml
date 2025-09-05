@@ -1,9 +1,16 @@
 name: Build and Release SPK
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+      release_notes:
+        description: 'Release notes'
+        required: false
+        default: 'OpenList Client SPK release'
 
 jobs:
   build:
@@ -24,14 +31,13 @@ jobs:
           mkdir -p package/scripts
           cp -r service package/
           cp -r web package/
-          tar -czvf openlist-client.spk package/*
+          tar -czvf openlist-client-${{ github.event.inputs.version }}.spk package/*
           
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: success()
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./openlist-client.spk
-          asset_name: openlist-client.spk
-          asset_content_type: application/octet-stream
+          tag_name: v${{ github.event.inputs.version }}
+          name: OpenList Client ${{ github.event.inputs.version }}
+          body: ${{ github.event.inputs.release_notes }}
+          files: openlist-client-${{ github.event.inputs.version }}.spk
