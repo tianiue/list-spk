@@ -1,4 +1,4 @@
-# OpenList 群晖客户端
+# OpenList 群晖客户端-暂时不用
 
 OpenList群晖客户端是一个专为群晖NAS设计的应用程序，用于连接OpenList网盘服务，将远程存储映射为本地文件夹。
 
@@ -40,8 +40,8 @@ OpenList群晖客户端是一个专为群晖NAS设计的应用程序，用于连
 
 如果需要自行构建SPK包：
 # 克隆仓库
-git clone https://github.com/yourusername/openlist-synology.git
-cd openlist-synology
+git clone https://github.com/tianiue/olist-spk.git
+cd olist-spk
 
 # 构建SPK
 mkdir -p build/target
