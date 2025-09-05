@@ -1,10 +1,16 @@
-name: Build Synology SPK Package
+name: Build and Release SPK Package
 
 on:
-  push:
-    branches: [ main ]
-  release:
-    types: [ created ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version'
+        required: true
+        default: '1.0.0'
+      arch:
+        description: 'Target architecture'
+        required: true
+        default: 'x86_64'
 
 jobs:
   build:
@@ -15,50 +21,41 @@ jobs:
       - name: Setup build environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y tar gzip coreutils
-          
+          sudo apt-get install -y build-essential tar gzip
+        
       - name: Create SPK structure
         run: |
-          mkdir -p package/conf
-          mkdir -p package/scripts
-          mkdir -p package/webapi
-          
-          # Copy source files
+          mkdir -p package/{bin,etc,scripts,web}
           cp -r src/* package/
+          chmod +x package/scripts/*
           
-          # Generate INFO file
-          cat <<EOF > package/INFO
-          package="OpenListMount"
-          version="$(date +%Y%m%d)"
-          arch="x86_64 aarch64"
-          firmware="7.2-69057"
-          maintainer="OpenListTeam"
+      - name: Generate INFO file
+        run: |
+          cat > package/INFO <<EOF
+          package="${{ github.event.inputs.package_name || 'OpenListMount' }}"
+          version="${{ inputs.version }}"
+          arch="${{ inputs.arch }}"
+          maintainer="YourName"
           displayname="OpenList Mount"
-          description="Mount OpenList WebDAV with dual auth support"
+          description="Mount OpenList WebDAV"
           install_dep_packages="WebDAVServer:service"
           startable="yes"
-          support_conf_folder="yes"
           dsmappname="SYNO.SDS.AdminCenter.Application"
-          dsmapppage="content"
-          adminport="8182"
           EOF
           
-          # Set permissions
-          chmod 755 package/scripts/*
-
-      - name: Package SPK
+      - name: Create SPK package
         run: |
-          cd package
-          tar -czvf ../OpenListMount.spk *
+          tar -czvf ${{ github.event.inputs.package_name || 'OpenListMount' }}-${{ inputs.version }}-${{ inputs.arch }}.spk -C package .
           
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: OpenListMount.spk
-          path: OpenListMount.spk
+          name: spk-package
+          path: ${{ github.event.inputs.package_name || 'OpenListMount' }}-${{ inputs.version }}-${{ inputs.arch }}.spk
           
       - name: Create release
-        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
-          files: OpenListMount.spk
+          tag_name: v${{ inputs.version }}
+          name: Release v${{ inputs.version }}
+          files: ${{ github.event.inputs.package_name || 'OpenListMount' }}-${{ inputs.version }}-${{ inputs.arch }}.spk
