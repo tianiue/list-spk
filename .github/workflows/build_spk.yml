@@ -15,22 +15,29 @@ jobs:
           
       - name: Install dependencies
         run: |
-          sudo apt-get install -y tar gzip jq
+          sudo apt-get install -y tar gzip jq tree
           pip install pyinstaller
           
-      - name: Prepare directories
+      - name: Prepare directory structure
         run: |
-          mkdir -p package/bin
-          mkdir -p dist
+          mkdir -p package/{bin,scripts,web}
+          [ -d "src/scripts" ] && cp -r src/scripts/* package/scripts/ || touch package/scripts/.keep
           
       - name: Build desktop client
         run: |
           pyinstaller --onefile src/main.py --name openlist-gui
-          cp -v dist/openlist-gui package/bin/
+          cp dist/openlist-gui package/bin/
+          
+      - name: Verify scripts
+        run: |
+          if [ -z "$(ls -A package/scripts/)" ]; then
+            echo "::warning::No scripts found in package/scripts/"
+          else
+            chmod +x package/scripts/*
+          fi
           
       - name: Package SPK
         run: |
-          chmod +x package/scripts/*
           tar -czvf OpenListMount-${{ github.event.inputs.version || '2.1.0' }}.spk \
             -C package \
             --owner=root --group=root \
