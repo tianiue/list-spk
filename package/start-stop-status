@@ -1,0 +1,38 @@
+#!/bin/sh
+
+# 客户端可执行文件路径（根据实际安装目录调整）
+DAEMON="/var/packages/OpenListClient/target/src/client.py"
+# 进程ID文件
+PIDFILE="/var/run/OpenListClient.pid"
+
+case "$1" in
+    start)
+        # 检查依赖（如Python环境，DSM 7.2可能预装Python3）
+        if ! command -v python3 &> /dev/null; then
+            echo "Error: Python3 is required (DSM 7.2 may need Python3 package installed)"
+            exit 1
+        fi
+        # 启动服务（后台运行并记录PID）
+        python3 "$DAEMON" &
+        echo $! > "$PIDFILE"
+        ;;
+    stop)
+        # 停止服务
+        if [ -f "$PIDFILE" ]; then
+            kill $(cat "$PIDFILE") && rm -f "$PIDFILE"
+        fi
+        ;;
+    status)
+        # 检查服务状态（DSM 7.2会调用此命令显示状态）
+        if [ -f "$PIDFILE" ] && kill -0 $(cat "$PIDFILE") 2>/dev/null; then
+            exit 0  # 运行中
+        else
+            exit 1  # 未运行
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status}"
+        exit 1
+        ;;
+esac
+exit 0
