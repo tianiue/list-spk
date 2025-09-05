@@ -33,12 +33,16 @@ jobs:
         
       - name: Build SPK
         run: |
-         mkdir -p package/scripts build  # 同步创建build目录
+         mkdir -p "$GITHUB_WORKSPACE/package/scripts" "$GITHUB_WORKSPACE/build"
          cp -r service package/
          cp -r web package/
-         tar -czf "build/openlist-client-${{ github.event.inputs.version }}.spk" -C package . 2>&1 | tee build.log
-         [ -s build.log ] && echo "##[error]Build failed" && exit 1
-
+         tar -czf "$GITHUB_WORKSPACE/build/openlist-client-${{ github.event.inputs.version }}.spk" \
+             -C "$GITHUB_WORKSPACE/package" . || (echo "##[error]Tar failed"; exit 1)
+         if ! tar -czf "build/openlist-client-${{ github.event.inputs.version }}.spk" -C package .; then
+            echo "##[error]Build failed" >&2
+            exit 1
+         fi
+         
       - name: Build artifacts
         run: |
           echo "${{ github.event.inputs.release_notes }}" > build/release.txt
