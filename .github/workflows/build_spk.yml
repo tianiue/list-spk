@@ -33,13 +33,26 @@ jobs:
         with:
           fetch-depth: 0
           
+      - name: 设置Python版本
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'  # 与群晖兼容的稳定版本
+          
       - name: 设置版本号
         id: version
         run: |
           # 仅使用手动输入的版本号
           echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           
-      - name: 缓存依赖
+      - name: 缓存系统依赖
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+            
+      - name: 缓存Python依赖
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
@@ -95,11 +108,27 @@ jobs:
           # 群晖SPK要求使用特定格式的tar包
           tar --format=gnu --owner=0 --group=0 -cvf ../openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk *
           
-      - name: 验证SPK包
+      - name: 增强SPK包验证
         run: |
-          # 简单验证SPK包结构
-          if ! tar -tf openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk | grep -q "INFO"; then
-            echo "SPK包不包含必要的INFO文件"
+          # 验证关键文件是否存在
+          required_files=("start-stop-status" "INFO")
+          spk_file="openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk"
+          
+          for file in "${required_files[@]}"; do
+            if ! tar -tf "$spk_file" | grep -q "$file"; then
+              echo "错误：SPK包缺少必要文件: $file"
+              exit 1
+            fi
+          done
+          
+          # 验证权限是否正确（通过tar查看文件权限）
+          if ! tar -tvf "$spk_file" | awk '$1 ~ /^-rwxr-xr-x/ && /start-stop-status/'; then
+            echo "错误：start-stop-status权限不正确（需755）"
+            exit 1
+          fi
+          
+          if ! tar -tvf "$spk_file" | awk '$1 ~ /^-rw-r--r--/ && /INFO/'; then
+            echo "错误：INFO文件权限不正确（需644）"
             exit 1
           fi
           
@@ -141,17 +170,23 @@ jobs:
           echo "## OpenList 群晖客户端 ${{ steps.version.outputs.VERSION }}" > RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 本次更新内容" >> RELEASE_NOTES.md
-          echo "- 手动构建版本" >> RELEASE_NOTES.md
+          echo "- 自动构建版本，包含全架构支持" >> RELEASE_NOTES.md
+          echo "- 优化权限配置和打包流程" >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 支持的架构" >> RELEASE_NOTES.md
           echo "- x86_64" >> RELEASE_NOTES.md
           echo "- armv7" >> RELEASE_NOTES.md
           echo "- armv8" >> RELEASE_NOTES.md
           
-      - name: 创建并推送Git标签
+      - name: 处理标签冲突并推送
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
+          # 若标签已存在则删除
+          if git rev-parse ${{ steps.version.outputs.TAG }} >/dev/null 2>&1; then
+            git tag -d ${{ steps.version.outputs.TAG }}
+            git push origin --delete ${{ steps.version.outputs.TAG }}
+          fi
           git tag ${{ steps.version.outputs.TAG }}
           git push origin ${{ steps.version.outputs.TAG }}
           
