@@ -1,58 +1,132 @@
-name: Build and Release SPK
+name: Build and Release OpenList Synology Package
 
-
+# 仅支持手动触发
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Release version (e.g. 1.0.0)'
+      releaseVersion:
+        description: '版本号 (例如: 1.0.0)'
         required: true
         default: '1.0.0'
-      release_notes:
-        description: 'Release notes'
-        required: false
-        default: 'OpenList Client SPK release'
+      isPreRelease:
+        description: '是否为预发布版本'
+        required: true
+        type: boolean
+        default: false
 
-permissions:  # 显式声明最小权限
-  contents: write  # 仅允许写入仓库内容（发布版本）
-  actions: read    # 仅需读取权限（查看工作流状态）
+# 显式声明最小权限
+permissions:
+  contents: write  # 允许写入仓库内容（用于发布版本）
+  actions: read    # 仅允许读取工作流信息
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 支持的群晖架构
+        arch: [x86_64, armv7, armv8]
+    
     steps:
-      - uses: actions/checkout@v2
-      
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - name: Checkout 代码
+        uses: actions/checkout@v4
         with:
-          python-version: '3.8'
+          fetch-depth: 0
           
-      - name: Install dependencies
-        run: pip install -r ./requirements.txt
-        
-      - name: Build SPK
+      - name: 设置版本号
+        id: version
         run: |
-         mkdir -p "$GITHUB_WORKSPACE/package/scripts" "$GITHUB_WORKSPACE/build"
-         cp -r service package/
-         cp -r web package/
-         tar -czf "$GITHUB_WORKSPACE/build/openlist-client-${{ github.event.inputs.version }}.spk" \
-             -C "$GITHUB_WORKSPACE/package" . || (echo "##[error]Tar failed"; exit 1)
-         if ! tar -czf "build/openlist-client-${{ github.event.inputs.version }}.spk" -C package .; then
-            echo "##[error]Build failed" >&2
-            exit 1
-         fi
-         
-      - name: Build artifacts
-        run: |
-          echo "${{ github.event.inputs.release_notes }}" > build/release.txt
-          zip -j build/release.zip build/release.txt
-
-      - uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 使用默认token（已自动受限）
+          # 仅使用手动输入的版本号
+          echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
+          
+      - name: 缓存依赖
+        uses: actions/cache@v3
         with:
-          tag_name: "v${{ github.event.inputs.version }}"  # 动态版本号
-          files: |
-            build/openlist-client-*.spk
-            build/release.zip
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            
+      - name: 安装构建依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools python3 python3-pip
+          pip3 install --upgrade pip
+          pip3 install -r requirements.txt
+          
+      - name: 准备构建环境
+        run: |
+          # 创建构建目录
+          mkdir -p build/target
+          
+          # 复制源代码和配置文件
+          cp -r src/* build/target/
+          cp -r package/* build/
+          
+          # 根据架构修改INFO文件
+          sed -i "s|{ARCH}|${{ matrix.arch }}|g" build/INFO
+          sed -i "s|{VERSION}|${{ steps.version.outputs.VERSION }}|g" build/INFO
+          
+      - name: 构建SPK包
+        run: |
+          cd build
+          # 群晖SPK要求使用特定格式的tar包
+          tar --format=gnu --owner=0 --group=0 -cvf ../openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk *
+          
+      - name: 验证SPK包
+        run: |
+          # 简单验证SPK包结构
+          if ! tar -tf openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk | grep -q "INFO"; then
+            echo "SPK包不包含必要的INFO文件"
+            exit 1
+          fi
+          
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v3
+        with:
+          name: openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}
+          path: openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+          
+      - name: 设置版本号
+        id: version
+        run: |
+          # 仅使用手动输入的版本号
+          echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
+          
+      - name: 整理发布文件
+        run: |
+          mkdir -p release
+          find artifacts -name "*.spk" -exec cp {} release/ \;
+          
+      - name: 生成发布说明
+        run: |
+          echo "## OpenList 群晖客户端 ${{ steps.version.outputs.VERSION }}" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "### 本次更新内容" >> RELEASE_NOTES.md
+          echo "- 手动构建版本" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "### 支持的架构" >> RELEASE_NOTES.md
+          echo "- x86_64" >> RELEASE_NOTES.md
+          echo "- armv7" >> RELEASE_NOTES.md
+          echo "- armv8" >> RELEASE_NOTES.md
+          
+      - name: 创建GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: OpenList 群晖客户端 v${{ steps.version.outputs.VERSION }}
+          body_path: RELEASE_NOTES.md
+          files: release/*.spk
+          draft: false
+          prerelease: ${{ github.event.inputs.isPreRelease }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
