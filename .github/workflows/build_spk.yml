@@ -36,14 +36,12 @@ jobs:
           mkdir -p package/scripts
           cp -r service package/
           cp -r web package/
-          tar -czvf openlist-client-${{ github.event.inputs.version }}.spk package/*
-
+          tar -czvf "build/openlist-client-${{ github.event.inputs.version }}.spk" package/*
 
       - name: Build artifacts
         run: |
-          mkdir -p build
-          echo "Release content" > build/release.txt
-          zip -r build/release.zip build/
+          echo "${{ github.event.inputs.release_notes }}" > build/release.txt
+          zip -j build/release.zip build/release.txt
 
       - uses: softprops/action-gh-release@v1
         env:
@@ -51,5 +49,5 @@ jobs:
         with:
           tag_name: "v${{ github.event.inputs.version }}"  # 动态版本号
           files: |
-            build/*.spk
+            build/openlist-client-*.spk
             build/release.zip
