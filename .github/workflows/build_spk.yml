@@ -33,10 +33,11 @@ jobs:
         
       - name: Build SPK
         run: |
-          mkdir -p package/scripts
-          cp -r service package/
-          cp -r web package/
-          tar -czvf "build/openlist-client-${{ github.event.inputs.version }}.spk" package/*
+         mkdir -p package/scripts build  # 同步创建build目录
+         cp -r service package/
+         cp -r web package/
+         tar -czf "build/openlist-client-${{ github.event.inputs.version }}.spk" -C package . 2>&1 | tee build.log
+         [ -s build.log ] && echo "##[error]Build failed" && exit 1
 
       - name: Build artifacts
         run: |
