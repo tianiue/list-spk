@@ -18,10 +18,15 @@ jobs:
           sudo apt-get install -y tar gzip jq
           pip install pyinstaller
           
+      - name: Prepare directories
+        run: |
+          mkdir -p package/bin
+          mkdir -p dist
+          
       - name: Build desktop client
         run: |
           pyinstaller --onefile src/main.py --name openlist-gui
-          cp dist/openlist-gui package/bin/
+          cp -v dist/openlist-gui package/bin/
           
       - name: Package SPK
         run: |
