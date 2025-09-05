@@ -14,9 +14,9 @@ on:
         type: boolean
         default: false
 
-# 显式声明最小权限
+# 显式声明最小权限（需要添加标签的权限）
 permissions:
-  contents: write  # 允许写入仓库内容（用于发布版本）
+  contents: write  # 允许写入仓库内容（用于发布版本和创建标签）
   actions: read    # 仅允许读取工作流信息
 
 jobs:
@@ -40,7 +40,7 @@ jobs:
           echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           
       - name: 缓存依赖
-        uses: actions/cache@v4
+        uses: actions/cache@v3
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -82,7 +82,7 @@ jobs:
           fi
           
       - name: 上传构建产物
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}
           path: openlist-synology-${{ steps.version.outputs.VERSION }}-${{ matrix.arch }}.spk
@@ -92,8 +92,13 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
       - name: 下载所有构建产物
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           path: artifacts
           
@@ -102,6 +107,7 @@ jobs:
         run: |
           # 仅使用手动输入的版本号
           echo "VERSION=${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
+          echo "TAG=v${{ github.event.inputs.releaseVersion }}" >> $GITHUB_OUTPUT
           
       - name: 整理发布文件
         run: |
@@ -120,9 +126,17 @@ jobs:
           echo "- armv7" >> RELEASE_NOTES.md
           echo "- armv8" >> RELEASE_NOTES.md
           
+      - name: 创建并推送Git标签
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git tag ${{ steps.version.outputs.TAG }}
+          git push origin ${{ steps.version.outputs.TAG }}
+          
       - name: 创建GitHub Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.version.outputs.TAG }}  # 指定标签
           name: OpenList 群晖客户端 v${{ steps.version.outputs.VERSION }}
           body_path: RELEASE_NOTES.md
           files: release/*.spk
