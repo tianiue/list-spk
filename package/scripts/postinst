@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# 创建配置目录
+mkdir -p /var/packages/OpenList/etc
+mkdir -p /var/packages/OpenList/target
+
+# 设置权限
+chmod 755 /var/packages/OpenList/target/main.py
+chmod 755 /var/packages/OpenList/target/service.sh
+
+# 注册为群晖服务
+synoservice --install /var/packages/OpenList/target/service.xml
+
+# 创建挂载点目录
+mkdir -p /volume1/OpenList_Mount
+chmod 777 /volume1/OpenList_Mount
+
+# 显示安装完成信息
+echo "OpenList客户端安装完成"
