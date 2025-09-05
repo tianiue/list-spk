@@ -1,4 +1,4 @@
-name: Build and Release OpenList Synology Package
+name: Build OpenList Synology Package
 
 # 仅支持手动触发
 on:
