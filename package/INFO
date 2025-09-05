@@ -1,6 +1,6 @@
 package="openlist-client"
 version="1.0.0-0001"
-description="OpenList群晖客户端"
+description="OpenList客户端"
 maintainer="yourname@example.com"
 arch="x86_64"
 dsmappname="com.example.openlistclient"
